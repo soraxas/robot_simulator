@@ -11,6 +11,7 @@ import pybullet_tools.utils as pu
 import yaml
 from scipy.interpolate import interp1d
 
+from robosim.robo_trajectory import Trajectory, interpolate_trajectory
 from robosim.utils import get_project_root
 
 from robosim.simulator.robot_simulator import Robot, ConfigurationSpaceType
@@ -22,21 +23,6 @@ from robosim.robo_state import JointState, Pose
 class PathRequest:
     start_state: JointState
     target_state: JointState
-
-
-@dataclass
-class Trajectory:
-    states: List[JointState]
-
-    def get(self, joint_state_names: List[str]):
-        return [state.get(joint_state_names) for state in self.states]
-
-
-def interpolate_trajectory(start, target):
-    fst = np.array(start)
-    snd = np.array(target)
-    linfit = interp1d([0, 1], np.vstack([fst, snd]), axis=0)
-    return linfit
 
 
 class RobotScene:
@@ -62,12 +48,17 @@ class RobotScene:
     def play(
         self,
         trajectory: Trajectory,
-        target_joint_names: List[str],
+        target_joint_names: List[str] = None,
         interpolate_step: int = 50,
         delay_between_interpolated_joint: float = 0.02,
         delay_between_joint: float = 2.0,
         callback: Callable[[ConfigurationSpaceType, int], None] = None,
     ):
+        # if target_joint_names is not given, it will default to the joint names given
+        # in the first joint state of the trajectory
+        if target_joint_names is None:
+            target_joint_names = list(trajectory.states[0].name)
+
         target_joint_indexes = self.robot.joint_name_to_indexes(target_joint_names)
 
         last_qs = None

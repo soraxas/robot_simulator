@@ -9,7 +9,7 @@ import numpy as np
 
 from robosim.utils import get_project_root
 
-WorkSpaceType = torch.Tensor
+WorkSpaceType = Union[torch.Tensor, List[float], np.ndarray]
 ConfigurationSpaceType = torch.Tensor
 
 
@@ -135,7 +135,10 @@ class Robot:
         mapped_qs = []
         for _qs in qs:
             mapped_qs.append([])
-            for idx in self.target_joint_indices:
+            print(self.target_joint_indices_pybullet)
+            print(len(_qs))
+            print(self.joints_names)
+            for idx in self.target_joint_indices_pybullet:
                 mapped_qs[-1].append(_qs[idx])
         return mapped_qs
 
@@ -163,16 +166,6 @@ class Robot:
                 device=qs.device,
                 dtype=qs.dtype,
             )
-
-            # print(mapped_qs)
-            # print(qs)
-            # for i in range(14):
-            #     print(self.learnable_robot_model._bodies[i].name)
-            # print(self.learnable_robot_model._urdf_model.robot.links)
-            # print(self.learnable_robot_model._controlled_joints)
-            # print(self.learnable_robot_model._n_dofs)
-            # print(self.joints_names)
-            # print(self.target_joint_indices)
             i = 0
             for idx in self.target_joint_indices:
                 mapped_qs[..., i] = qs[..., idx]
@@ -206,7 +199,8 @@ class Robot:
     def joints_names(self):
         names = []
         for i in range(pu.get_num_joints(self.pyb_robot_id)):
-            names.append(pu.get_joint_name(self.pyb_robot_id, i))
+            if not pu.is_fixed(self.pyb_robot_id, i):
+                names.append(pu.get_joint_name(self.pyb_robot_id, i))
         return names
 
     @cached_property
@@ -229,6 +223,12 @@ class Robot:
         # return [
         #     self.joints_names_to_index_mapping[name] for name in self.target_joint_names
         # ]
+
+    @cached_property
+    def target_joint_indices_pybullet(self):
+        return [
+            self.joints_names_to_index_mapping[name] for name in self.target_joint_names
+        ]
 
     def get_joints_limits(self, as_tensor=True):
         """Returns all requested (target) joints limits"""

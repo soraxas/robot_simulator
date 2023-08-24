@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from functools import cached_property
-from typing import List
+from typing import List, Dict
 
 import quaternion
 
@@ -12,10 +12,13 @@ class Pose:
     position: List[float]
     orientation: quaternion.quaternion
 
-    def __init__(self, position, quat):
+    def __init__(self, position, quat, order: str = "xyzw"):
         self.position = position
         if not isinstance(quat, quaternion.quaternion):
-            quat = quaternion.quaternion(quat[3], quat[0], quat[1], quat[2])
+            if order == "xyzw":
+                quat = quaternion.quaternion(quat[3], quat[0], quat[1], quat[2])
+            elif order == "wxyz":
+                quat = quaternion.quaternion(*quat)
         self.orientation = quat
 
     @cached_property
@@ -46,5 +49,12 @@ class JointState:
     name: List[str]
     position: List[float]
 
-    def get(self, joint_state_names: List[str]):
-        return [self.position[self.name.index(name)] for name in joint_state_names]
+    @cached_property
+    def name_to_index_mapping(self) -> Dict[str, int]:
+        return {_name: i for i, _name in enumerate(self.name)}
+
+    def get(self, joint_state_names: List[str]) -> List[float]:
+        return [
+            self.position[self.name_to_index_mapping[name]]
+            for name in joint_state_names
+        ]
