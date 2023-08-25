@@ -1,19 +1,15 @@
+from typing import Iterable
 from pathlib import Path
+from abc import ABC
 import numpy as np
 
 from robosim.robo_trajectory import EndEffectorTrajectory
 
-list_of_files = [
-    "h.npy",
-    "e.npy",
-    "l.npy",
-    "l.npy",
-    "o.npy",
-]
-
 
 class DemonstratedWorldSpaceTrajectories:
     def __init__(self, demonstrations: np.ndarray, name: str):
+        # demonstrations must be a numpy array with ..x..x..x[2/3]
+
         self.name = name
         assert demonstrations.shape[-1] in (2, 3)
         assert len(demonstrations.shape) >= 2
@@ -37,15 +33,9 @@ class DemonstratedWorldSpaceTrajectories:
             yield EndEffectorTrajectory(demonstrations[i, :, :])
 
 
-class WorldSpaceTrajectoryDataset:
+class WorldSpaceTrajectoryDataset(ABC):
     def __init__(self, root_path: str):
         self.root_path = Path(root_path)
 
-    def __iter__(self):
-        for fname in list_of_files:
-            # original dataset in cm
-            xs = np.load(self.root_path / fname) / 100
-            yield DemonstratedWorldSpaceTrajectories(
-                demonstrations=xs,
-                name=fname,
-            )
+    def __iter__(self) -> Iterable[DemonstratedWorldSpaceTrajectories]:
+        raise NotImplementedError()
