@@ -20,5 +20,13 @@ def set_seed(seed=42):
     torch.backends.cudnn.benchmark = False
 
 
-def get_project_root():
+def get_project_root() -> Path:
     return Path(__file__).parent.parent.resolve()
+
+
+def get_robot_resources_root() -> Path:
+    return get_project_root() / "robot_resources"
+
+
+def get_robot_resources_root() -> Path:
+    return get_project_root() / "robot_resources"

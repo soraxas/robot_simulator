@@ -7,10 +7,13 @@ import pybullet_tools.utils as pu
 import torch
 import numpy as np
 
-from robosim.utils import get_project_root
+from robosim.utils import get_robot_resources_root
 
 WorkSpaceType = Union[torch.Tensor, List[float], np.ndarray]
 ConfigurationSpaceType = torch.Tensor
+
+
+ROBOT_RESOURCE_ROOT = get_robot_resources_root() / "robot_model"
 
 
 class Robot:
@@ -345,9 +348,7 @@ class Robot:
 
 class PandaRobot(Robot):
     def __init__(self, **kwargs):
-        project_path = get_project_root()
-
-        self.urdf_path = project_path.joinpath("robot_resources/panda/urdf/panda.urdf")
+        self.urdf_path = ROBOT_RESOURCE_ROOT / "panda/urdf/panda.urdf"
         # choose links to operate
         target_link_names = [
             # "panda_link0",
@@ -383,11 +384,7 @@ class PandaRobot(Robot):
 
 class KinovaRobot(Robot):
     def __init__(self, **kwargs):
-        project_path = get_project_root()
-
-        self.urdf_path = project_path.joinpath(
-            "robot_resources/kinova/urdf/jaco_clean.urdf"
-        )
+        self.urdf_path = ROBOT_RESOURCE_ROOT / "kinova/urdf/jaco_clean.urdf"
         # choose links to operate
         target_link_names = [
             # "j2n6s300_link_base",
