@@ -1,0 +1,5 @@
+torch
+git+https://github.com/soraxas/differentiable-robot-model.git@feature-various-stuff#egg=differentiable-robot-model
+git+https://github.com/soraxas/pybullet-planning@f580bad01479d657b9ee549b440e33706b10318d
+numpy-quaternion
+scipy
