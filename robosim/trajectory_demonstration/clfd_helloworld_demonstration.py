@@ -2,7 +2,7 @@ from pathlib import Path
 import numpy as np
 from robosim.utils import get_robot_resources_root
 
-from .trajectory_demonstration import (
+from robosim.trajectory_demonstration import (
     WorldSpaceTrajectoryDataset,
     DemonstratedWorldSpaceTrajectories,
 )
