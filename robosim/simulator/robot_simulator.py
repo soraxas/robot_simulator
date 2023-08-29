@@ -8,9 +8,10 @@ import torch
 import numpy as np
 
 from robosim.utils import get_robot_resources_root
+from robosim.controller_output import ControllerJointType, AbstractController
+from robosim.controller_output.pybullet_controller import PyBulletController
 
-WorkSpaceType = Union[torch.Tensor, List[float], np.ndarray]
-ConfigurationSpaceType = torch.Tensor
+from .data_types import WorkSpaceType, ConfigurationSpaceType
 
 
 ROBOT_RESOURCE_ROOT = get_robot_resources_root() / "robot_model"
@@ -31,6 +32,7 @@ class Robot:
         p_client=p.DIRECT,
         has_gravity=False,
         setup_learnable_model: bool = False,
+        controller: Optional[AbstractController] = None,
     ):
         self.urdf_path = urdf_path
         self.target_link_names = target_link_names
@@ -60,6 +62,11 @@ class Robot:
             # p.setGravity(0,0,-10)
         else:
             pu.disable_gravity()
+
+        if controller is None:
+            controller = PyBulletController()
+        self.controller: AbstractController = controller
+        self.controller.set_robot(self)
 
         p.setAdditionalSearchPath(pybullet_data.getDataPath())  # optionally
         if include_plane:
@@ -103,16 +110,13 @@ class Robot:
 
     def set_qs(
         self,
-        qs: Union[ConfigurationSpaceType, Iterable[float]],
+        qs: ConfigurationSpaceType,
         joint_indexes: List[int] = None,
+        joint_names: List[str] = None,
     ):
-        if joint_indexes is None:
-            joint_indexes = self.joint_name_to_indexes(self.target_joint_names)
-        if len(qs) != len(joint_indexes):
-            print(
-                f"qs has length {len(qs)} but joint index has length {len(joint_indexes)}"
-            )
-        pu.set_joint_positions(self.pyb_robot_id, joint_indexes, qs)
+        self.controller.set_qs(
+            qs=qs, joint_indexes=joint_indexes, joint_names=joint_names
+        )
 
     def ee_xs_to_qll_qs(
         self, xs: WorkSpaceType, reference_orientation: Optional[List[float]] = None
@@ -406,16 +410,17 @@ class KinovaRobot(Robot):
             "j2n6s300_joint_6",
             # "j2n6s300_joint_end_effector",
             "j2n6s300_joint_finger_1",
-            "j2n6s300_joint_finger_tip_1",
+            # "j2n6s300_joint_finger_tip_1",
             "j2n6s300_joint_finger_2",
-            "j2n6s300_joint_finger_tip_2",
+            # "j2n6s300_joint_finger_tip_2",
             "j2n6s300_joint_finger_3",
-            "j2n6s300_joint_finger_tip_3",
+            # "j2n6s300_joint_finger_tip_3",
             # "panda_joint8",
             # "panda_hand_joint",
         ]
         if "default_qs" not in kwargs:
-            kwargs["default_qs"] = [0, np.pi, np.pi, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+            kwargs["default_qs"] = [0, np.pi, np.pi, 0, 0, 0, 0, 0, 0]
+            # kwargs["default_qs"] = [0, np.pi, np.pi, 0, 0, 0, 0, 0, 0, 0, 0, 0]
         super().__init__(
             urdf_path=str(self.urdf_path),
             target_link_names=target_link_names,
