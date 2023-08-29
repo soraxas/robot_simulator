@@ -8,6 +8,7 @@ import time
 from robosim.robot_scene import JointState, robot_scene
 from robosim.simulator.robot_simulator import PandaRobot, KinovaRobot
 from robosim.controller_output.moveit_fake_controller import MoveItFakeController
+from robosim.controller_output.kinova_client import KinovaController
 from robosim.controller_output.pybullet_controller import PyBulletController
 from robosim.controller_output.multicast_controller import MultiCastController
 from robosim.trajectory_demonstration.clfd_helloworld_demonstration import (
@@ -23,6 +24,7 @@ parser.add_argument("-d2", "--delay-between-solution", default=0.15, type=float)
 parser.add_argument("-d3", "--delay-between-scene", default=2, type=float)
 parser.add_argument("-s", "--interpolate-step", default=0, type=int)
 parser.add_argument("-n", "--num-solution-to-vis", default=100, type=int)
+parser.add_argument("--with-real-robot", default=False, action="store_true")
 parser.add_argument(
     "-r",
     "--visualise-request",
@@ -39,9 +41,10 @@ if __name__ == "__main__":
     )
     print("\n\n")
 
-    controller = MultiCastController(
-        controllers=[MoveItFakeController(), PyBulletController()]
-    )
+    _controllers = [MoveItFakeController(), PyBulletController()]
+    if args.with_real_robot:
+        _controllers.append(KinovaController())
+    controller = MultiCastController(controllers=_controllers)
 
     robot = KinovaRobot(
         device="cpu",
