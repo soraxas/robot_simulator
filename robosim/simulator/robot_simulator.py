@@ -142,9 +142,6 @@ class Robot:
         mapped_qs = []
         for _qs in qs:
             mapped_qs.append([])
-            print(self.target_joint_indices_pybullet)
-            print(len(_qs))
-            print(self.joints_names)
             for idx in self.target_joint_indices_pybullet:
                 mapped_qs[-1].append(_qs[idx])
         return mapped_qs

@@ -12,6 +12,7 @@ import yaml
 from scipy.interpolate import interp1d
 
 from robosim.robo_trajectory import Trajectory, interpolate_trajectory
+from robosim.robot_scene.objects import PybulletSceneObject
 from robosim.utils import get_project_root
 
 from robosim.simulator.robot_simulator import Robot, ConfigurationSpaceType
@@ -44,6 +45,9 @@ class RobotScene:
 
     def build_scene(self):
         return list(self.added_bodies)
+
+    def add_object(self, scene_object: PybulletSceneObject):
+        self.added_bodies.append(scene_object.build())
 
     def play(
         self,
