@@ -17,8 +17,9 @@ class PybulletSceneObject(ABC):
     def _build(self) -> int:
         pass
 
-    def build(self):
+    def build(self) -> int:
         self.handle = self._build()
+        return self.handle
 
 
 class BoxPrimitive(PybulletSceneObject):
