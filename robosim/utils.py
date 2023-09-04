@@ -30,3 +30,16 @@ def get_robot_resources_root() -> Path:
 
 def get_robot_resources_root() -> Path:
     return get_project_root() / "robot_resources"
+
+
+class PybulletDebugCtxMgr:
+    def __init__(self, debug_id: int):
+        self.debug_id = debug_id
+
+    def __enter__(self):
+        pass
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        import pybullet_tools.utils as pu
+
+        pu.remove_debug(self.debug_id)
