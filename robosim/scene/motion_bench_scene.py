@@ -61,10 +61,18 @@ class MotionBenchScene(RobotScene):
     def __init__(self, robot: Robot, tag_name: str):
         super().__init__(robot=robot)
         self.tag_name = tag_name
+        self.root = get_project_root() / "robodata" / "motion_bench"
+        if not self.scene_path.exists():
+            raise RuntimeError(
+                "\n==========================================\n"
+                f"Necessary resource file not found.\n"
+                f"Please cd to '{get_project_root()}' and run `make motion_bench -j` to download necessary files.\n"
+                "==========================================\n"
+            )
 
     @cached_property
     def config_path(self):
-        return get_project_root() / "robodata" / f"{self.tag_name}-config.yaml"
+        return self.root / f"{self.tag_name}-config.yaml"
 
     @cached_property
     def robot_base_offset(self) -> Pose:
@@ -77,21 +85,15 @@ class MotionBenchScene(RobotScene):
 
     @cached_property
     def scene_path(self):
-        return get_project_root() / "robodata" / f"{self.tag_name}-scene0001.yaml"
+        return self.root / f"{self.tag_name}-scene0001.yaml"
 
     @cached_property
     def weight_path(self):
-        return (
-            get_project_root()
-            / "robodata"
-            / f"{self.tag_name}-scene0001_continuous-occmap-weight.ckpt"
-        )
+        return self.root / f"{self.tag_name}-scene0001_continuous-occmap-weight.ckpt"
 
     @cached_property
     def dataset_path(self):
-        return (
-            get_project_root() / "robodata" / f"{self.tag_name}-scene0001_dataset.csv"
-        )
+        return self.root / f"{self.tag_name}-scene0001_dataset.csv"
 
     def __len__(self):
         return len(self.trajectory_paths)
@@ -99,25 +101,13 @@ class MotionBenchScene(RobotScene):
     @cached_property
     def trajectory_paths(self):
         return sorted(
-            glob.glob(
-                str(
-                    get_project_root()
-                    / "robodata"
-                    / f"{self.tag_name}-scene0001_path*.yaml"
-                )
-            )
+            glob.glob(str(self.root / f"{self.tag_name}-scene0001_path*.yaml"))
         )
 
     @cached_property
     def request_paths(self):
         return sorted(
-            glob.glob(
-                str(
-                    get_project_root()
-                    / "robodata"
-                    / f"{self.tag_name}-scene0001_request*.yaml"
-                )
-            )
+            glob.glob(str(self.root / f"{self.tag_name}-scene0001_request*.yaml"))
         )
 
     def build_scene(self):

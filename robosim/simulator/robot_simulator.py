@@ -92,14 +92,6 @@ class Robot:
             self.set_qs(default_qs)
 
     @property
-    def self_collision_model_weight_path(self):
-        return (
-            get_project_root()
-            / "robodata"
-            / f"selfCollisionModel_{self.__class__.__name__}.pkl"
-        )
-
-    @property
     def dof(self):
         return len(self.target_joint_names)
 
@@ -118,7 +110,7 @@ class Robot:
             qs=qs, joint_indexes=joint_indexes, joint_names=joint_names
         )
 
-    def ee_xs_to_qll_qs(
+    def ee_xs_to_all_qs(
         self, xs: WorkSpaceType, reference_orientation: Optional[List[float]] = None
     ) -> ConfigurationSpaceType:
         """
@@ -126,33 +118,62 @@ class Robot:
         """
         assert xs.shape[-1] == 3
 
-        qs = []
-        for x in xs:
-            qs.append(
-                pu.inverse_kinematics_helper(
-                    self.pyb_robot_id, self.ee_joint_idx, (x, reference_orientation)
-                )
+        return [
+            pu.inverse_kinematics_helper(
+                self.pyb_robot_id, self.ee_joint_idx, (x, reference_orientation)
             )
-        return qs
+            for x in xs
+        ]
 
     def ee_xs_to_qs(
         self, xs: WorkSpaceType, reference_orientation: Optional[List[float]] = None
     ) -> ConfigurationSpaceType:
-        qs = self.ee_xs_to_qll_qs(xs, reference_orientation)
-        mapped_qs = []
-        for _qs in qs:
-            mapped_qs.append([])
-            for idx in self.target_joint_indices_pybullet:
-                mapped_qs[-1].append(_qs[idx])
-        return mapped_qs
+        """
+        This is a wrapper that only returns the requested target qs.
+        """
+
+        def filter_unneeded_qs(all_qs):
+            mapped_qs = []
+            for _qs in all_qs:
+                mapped_qs.append([])
+                for idx in self.target_joint_indices_pybullet:
+                    mapped_qs[-1].append(_qs[idx])
+            return mapped_qs
+
+        # handle batched version.
+        if hasattr(xs, "shape") and len(xs.shape) == 3:
+            batch_size = xs.shape[0]
+            return torch.Tensor(
+                [
+                    filter_unneeded_qs(
+                        self.ee_xs_to_all_qs(
+                            xs[i, ...], reference_orientation=reference_orientation
+                        )
+                    )
+                    for i in range(batch_size)
+                ]
+            )
+        # else
+        return filter_unneeded_qs(self.ee_xs_to_all_qs(xs, reference_orientation))
 
     def qs_to_joints_xs(self, qs: ConfigurationSpaceType) -> WorkSpaceType:
         """
-        Given batch of qs [b x d]
-        Returns a batch of pos  [b x d x 3]
+        Given batch of qs [b1 x ... x bn x d]
+        Returns a batch of pos  [b1 x ... x bn x j x 3], where J is the number of joint from root to ee
+        e.g.,
+            input can be [20 x 6] for a 6dof robot,
+            output can be [20 x 8 x 3], where 8 is the number of join in-between, and 3 is the xyz dimension.
         """
         # ignore orientation
-        return torch.stack([pose[0] for pose in self.qs_to_joints_pose(qs)])
+        # handle batch.
+        batch_shape = qs.shape[:-1]
+        dimensionality = qs.shape[-1]
+        qs = qs.reshape(-1, dimensionality)
+
+        result = torch.stack([pose[0] for pose in self.qs_to_joints_pose(qs)])
+        # shape of j, b, 3, where j is the number of joint from root to ee
+        result = torch.swapaxes(result, 0, 1)  # shape is now b, j, 3
+        return result.reshape(*batch_shape, *result.shape[-2:])
 
     def qs_to_joints_pose(
         self, qs: ConfigurationSpaceType
@@ -162,18 +183,17 @@ class Robot:
         Returns a list of pose (i.e., pos in R^3 and orientation in R^4)
         """
         # defaulting the non-used index as zero
-        if len(self.joints_names) == qs.shape[-1]:
-            mapped_qs = qs
-        else:
-            mapped_qs = torch.zeros(
-                (*qs.shape[:-1], self.learnable_robot_model._n_dofs),
-                device=qs.device,
-                dtype=qs.dtype,
-            )
-            i = 0
-            for idx in self.target_joint_indices:
-                mapped_qs[..., i] = qs[..., idx]
-                i += 1
+        # if len(self.joints_names) == qs.shape[-1]:
+        #     mapped_qs = qs
+        # else:
+
+        mapped_qs = torch.zeros(
+            (*qs.shape[:-1], self.learnable_robot_model._n_dofs),
+            device=qs.device,
+            dtype=qs.dtype,
+        )
+        for i, idx in enumerate(self.target_joint_indices):
+            mapped_qs[..., idx] = qs[..., i]
 
         joints_xs = self.learnable_robot_model.compute_forward_kinematics_all_links(
             mapped_qs
@@ -211,17 +231,29 @@ class Robot:
     def joints_names_to_index_mapping(self):
         return {name: i for i, name in enumerate(self.joints_names)}
 
+    # TODO: FIXME: :(
+    @cached_property
+    def joints_names_learnable(self):
+        return self.learnable_robot_model.get_joint_names()
+
+    @cached_property
+    def joints_names_to_index_mapping_learnable(self):
+        return {name: i for i, name in enumerate(self.joints_names_learnable)}
+
     @cached_property
     def target_joint_indices(self):
         target_joint_indices = []
         for name in self.target_joint_names:
-            for i, body in enumerate(self.learnable_robot_model._bodies):
-                if body.joint_name == name:
+            for i, joint_name in enumerate(
+                self.learnable_robot_model.get_joint_names()
+            ):
+                if joint_name == name:
                     target_joint_indices.append(i)
                     break
             else:
                 print(f">> Target joint with name {name} not found!")
                 exit(1)
+
         return target_joint_indices
 
         # return [
@@ -387,41 +419,41 @@ class KinovaRobot(Robot):
     def __init__(self, **kwargs):
         self.urdf_path = ROBOT_RESOURCE_ROOT / "kinova/urdf/jaco_clean.urdf"
         # choose links to operate
-        target_link_names = [
-            # "j2n6s300_link_base",
-            "j2n6s300_link_1",
-            "j2n6s300_link_2",
-            "j2n6s300_link_3",
-            "j2n6s300_link_4",
-            "j2n6s300_link_5",
-            "j2n6s300_link_6",
-            "j2n6s300_end_effector",
-            "j2n6s300_link_ee",
-        ]
-        target_joint_names = [
-            "j2n6s300_joint_1",
-            "j2n6s300_joint_2",
-            "j2n6s300_joint_3",
-            "j2n6s300_joint_4",
-            "j2n6s300_joint_5",
-            "j2n6s300_joint_6",
-            # "j2n6s300_joint_end_effector",
-            "j2n6s300_joint_finger_1",
-            # "j2n6s300_joint_finger_tip_1",
-            "j2n6s300_joint_finger_2",
-            # "j2n6s300_joint_finger_tip_2",
-            "j2n6s300_joint_finger_3",
-            # "j2n6s300_joint_finger_tip_3",
-            # "panda_joint8",
-            # "panda_hand_joint",
-        ]
-        if "default_qs" not in kwargs:
-            kwargs["default_qs"] = [0, np.pi, np.pi, 0, 0, 0, 0, 0, 0]
-            # kwargs["default_qs"] = [0, np.pi, np.pi, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+        if "target_link_names" not in kwargs:
+            kwargs["target_link_names"] = [
+                # "j2n6s300_link_base",
+                "j2n6s300_link_1",
+                "j2n6s300_link_2",
+                "j2n6s300_link_3",
+                "j2n6s300_link_4",
+                "j2n6s300_link_5",
+                "j2n6s300_link_6",
+                "j2n6s300_end_effector",
+                "j2n6s300_link_ee",
+            ]
+        if "target_joint_names" not in kwargs:
+            kwargs["target_joint_names"] = [
+                "j2n6s300_joint_1",
+                "j2n6s300_joint_2",
+                "j2n6s300_joint_3",
+                "j2n6s300_joint_4",
+                "j2n6s300_joint_5",
+                "j2n6s300_joint_6",
+                # "j2n6s300_joint_end_effector",
+                "j2n6s300_joint_finger_1",
+                # "j2n6s300_joint_finger_tip_1",
+                "j2n6s300_joint_finger_2",
+                # "j2n6s300_joint_finger_tip_2",
+                "j2n6s300_joint_finger_3",
+                # "j2n6s300_joint_finger_tip_3",
+                # "panda_joint8",
+                # "panda_hand_joint",
+            ]
+            if "default_qs" not in kwargs:
+                kwargs["default_qs"] = [0, np.pi, np.pi, 0, 0, 0, 0, 0, 0]
+                # kwargs["default_qs"] = [0, np.pi, np.pi, 0, 0, 0, 0, 0, 0, 0, 0, 0]
         super().__init__(
             urdf_path=str(self.urdf_path),
-            target_link_names=target_link_names,
-            target_joint_names=target_joint_names,
             end_effector_link_name="j2n6s300_link_ee",
             **kwargs,
         )

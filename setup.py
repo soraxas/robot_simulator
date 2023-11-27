@@ -24,7 +24,8 @@ setup(
     python_requires=">=3.6",
     packages=[
         "robosim",
-        "robosim.robot_scene",
+        "robosim.scene",
+        "robosim.learning",
         "robosim.simulator",
         "robosim.trajectory_demonstration",
     ],

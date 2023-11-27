@@ -1,3 +1,5 @@
+.PHONY: all motion_bench clean
+
 ROBOT_RESOURCES=robot_resources
 ROBOT_RESOURCES_SRC=robot_resources/_src
 
@@ -25,5 +27,19 @@ $(ROBOT_RESOURCES)/robot_model/kinova/urdf/jaco_clean.urdf: $(ROBOT_RESOURCES_SR
 $(ROBOT_RESOURCES_SRC)/%.tar.xz:
 	mkdir -p $(dir $@)
 	cd $(dir $@) && wget "$(GH_RELEASE_URL_ROOT)/$*.tar.xz"
+
+#############################################################
+# for robot learning resources
+include Makefile.needed
+
+HOST=https://raw.githubusercontent.com/soraxas/__file-store__/master
+DATA_DIR=robodata/motion_bench
+
+motion_bench:  $(addprefix $(DATA_DIR)/, $(NEEDED))
+
+$(DATA_DIR)/%:
+	mkdir -p "$(DATA_DIR)"
+	# wget  --directory-prefix="$(DATA_DIR)" "$(HOST)/stein/kitchen/$*"
+	wget  --directory-prefix="$(DATA_DIR)" "$(HOST)/stein/$*"
 
 

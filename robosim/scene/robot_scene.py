@@ -12,12 +12,12 @@ import yaml
 from scipy.interpolate import interp1d
 
 from robosim.robo_trajectory import Trajectory, interpolate_trajectory
-from robosim.robot_scene.objects import PybulletSceneObject
 from robosim.utils import get_project_root
 
 from robosim.simulator.robot_simulator import Robot, ConfigurationSpaceType
-
 from robosim.robo_state import JointState, Pose
+
+from .objects import PybulletSceneObject
 
 
 @dataclass
