@@ -17,6 +17,26 @@ from .data_types import WorkSpaceType, ConfigurationSpaceType
 ROBOT_RESOURCE_ROOT = get_robot_resources_root() / "robot_model"
 
 
+BULLET_CLIENT = None
+
+
+class BulletClient:
+    def __init__(self, p_client=p.DIRECT):
+        # setup pybullet
+        self.physicsClient = p.connect(p_client)
+        # physicsClient = p.connect(p.GUI)  # or p.DIRECT for non-graphical version
+
+    def destroy(self):
+        p.disconnect(self.physicsClient)
+
+    @staticmethod
+    def get(*args, **kwargs):
+        global BULLET_CLIENT
+        if BULLET_CLIENT is None:
+            BULLET_CLIENT = BulletClient(*args, **kwargs)
+        return BULLET_CLIENT
+
+
 class Robot:
     def __init__(
         self,
@@ -53,9 +73,7 @@ class Robot:
             )
 
         ###############################################################
-        # setup pybullet
-        self.physicsClient = p.connect(p_client)
-        # physicsClient = p.connect(p.GUI)  # or p.DIRECT for non-graphical version
+        BulletClient.get(p_client=p_client)
 
         if has_gravity:
             p.setGravity(0, 0, -9.81)
@@ -367,7 +385,14 @@ class Robot:
         return collision_fn
 
     def destroy(self):
-        p.disconnect(self.physicsClient)
+        p.removeBody(self.pyb_robot_id)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, type, value, traceback):
+        self.destroy()
+        return False
 
     # def get_joints_limits(self):
     #     lowers = []

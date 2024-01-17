@@ -92,6 +92,14 @@ class RobotScene:
             [0, 0, 0, 1],
         )
 
+    def __enter__(self):
+        self.build_scene()
+        return self
+
+    def __exit__(self, type, value, traceback):
+        self.clear()
+        return False
+
     def clear(self):
         while len(self.added_bodies) > 0:
             bid = self.added_bodies.pop(0)
