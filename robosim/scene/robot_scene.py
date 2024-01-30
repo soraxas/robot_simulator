@@ -12,7 +12,12 @@ import yaml
 from scipy.interpolate import interp1d
 
 from robosim.robo_trajectory import Trajectory, interpolate_trajectory
-from robosim.utils import get_project_root
+from robosim.utils import (
+    get_project_root,
+    EmptyCtxMgr,
+    PybulletDebugCtxMgr,
+    plot_robot_ee_in_pybullet,
+)
 
 from robosim.simulator.robot_simulator import Robot, ConfigurationSpaceType
 from robosim.robo_state import JointState, Pose
@@ -111,15 +116,47 @@ class RobotScene:
     def add_object(self, scene_object: PybulletSceneObject):
         self.added_bodies.append(scene_object.build())
 
+    def interpolate_trajectory(
+        self,
+        trajectory: Trajectory,
+        target_joint_names: List[str],
+        interpolate_step: int,
+    ):
+        """
+        FIXME: right now `interpolate_step` is not reactive to the immediate user input. It only respect user input
+        after the whole trajectory.
+        """
+        target_joint_indexes = self.robot.joint_name_to_indexes(target_joint_names)
+
+        interpolate_step = 2
+
+        output_qs = []
+        last_qs = None
+        for i, qs in enumerate(trajectory.get(target_joint_names)):
+            if last_qs is not None:
+                interp = interpolate_trajectory(last_qs, qs)
+                ts = np.linspace(0, 1, num=interpolate_step)
+
+                output_qs.extend(interp(ts))
+            last_qs = qs
+            output_qs.append(qs)
+
+        return output_qs
+
     def play(
         self,
         trajectory: Trajectory,
         target_joint_names: List[str] = None,
-        interpolate_step: int = 50,
-        delay_between_interpolated_joint: float = 0.02,
-        delay_between_joint: float = 2.0,
+        interpolate_step: int = 0,
+        # the following is not being used.
+        delay_between_interpolated_joint=None,
+        delay_between_joint: float = 0.02,
         callback: Callable[[ConfigurationSpaceType, int], None] = None,
+        show_ee_traj: bool = False,
     ):
+        """
+        TODO: make interpolate step auto adjust based on travel distance.
+        """
         interpolate_step = GetParameter(
             name="interpolate_step",
             val=interpolate_step,
@@ -127,12 +164,12 @@ class RobotScene:
             upper=50,
             type_caster=int,
         )
-        delay_between_interpolated_joint = GetParameter(
-            name="delay_between_interpolated_joint",
-            val=delay_between_interpolated_joint,
-            lower=0,
-            upper=0.5,
-        )
+        # delay_between_interpolated_joint = GetParameter(
+        #     name="delay_between_interpolated_joint",
+        #     val=delay_between_interpolated_joint,
+        #     lower=0,
+        #     upper=0.5,
+        # )
         delay_between_joint = GetParameter(
             name="delay_between_joint",
             val=delay_between_joint,
@@ -140,26 +177,24 @@ class RobotScene:
             upper=0.01,
         )
 
-        # if target_joint_names is not given, it will default to the joint names given
-        # in the first joint state of the trajectory
-        if target_joint_names is None:
-            target_joint_names = list(trajectory.states[0].name)
-
         target_joint_indexes = self.robot.joint_name_to_indexes(target_joint_names)
 
-        last_qs = None
-        for i, qs in enumerate(trajectory.get(target_joint_names)):
-            if last_qs is not None:
-                interp = interpolate_trajectory(last_qs, qs)
-                ts = np.linspace(0, 1, num=interpolate_step.get())
-                for t in ts:
-                    self.robot.set_qs(interp(t), target_joint_indexes)
-                    time.sleep(delay_between_interpolated_joint.get())
+        # if target_joint_names is not given, it will default to the joint names given
+        # in the first joint state of the trajectory
+        qs = self.interpolate_trajectory(
+            trajectory, target_joint_names, interpolate_step.get()
+        )
 
-            last_qs = qs
-            self.robot.set_qs(qs, target_joint_indexes)
-            if callback:
-                callback(np.array(qs), i)
-            time.sleep(delay_between_joint.get())
-            time.sleep(delay_between_joint.get())
-            time.sleep(delay_between_joint.get())
+        if show_ee_traj:
+            ctx_mgr = PybulletDebugCtxMgr(
+                plot_robot_ee_in_pybullet(robot=self.robot, qs=qs)
+            )
+        else:
+            ctx_mgr = EmptyCtxMgr()
+
+        with ctx_mgr:
+            for i, q in enumerate(qs):
+                self.robot.set_qs(q, target_joint_indexes)
+                if callback:
+                    callback(np.array(q), i)
+                time.sleep(delay_between_joint.get())
